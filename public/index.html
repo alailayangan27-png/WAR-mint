@@ -20,15 +20,7 @@ body{
   height:100%;
   object-fit:cover;
   z-index:-2;
-  filter:brightness(0.6);
-}
-
-.overlay{
-  position:fixed;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.5);
-  z-index:-1;
+  filter:brightness(0.5);
 }
 
 .container{
@@ -83,8 +75,6 @@ button{
 <video autoplay muted loop id="bgVideo">
   <source src="war.mp4" type="video/mp4">
 </video>
-
-<div class="overlay"></div>
 
 <div class="container">
 
@@ -144,6 +134,16 @@ async function mint(){
 
   const sol = Number(document.getElementById("sol").value);
 
+  const txData = await fetch("/api/createTx",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ wallet, amount: sol })
+  });
+
+  const data = await txData.json();
+
+  if(data.error) return alert(data.error);
+
   const connection = new solanaWeb3.Connection(
     "https://rpc.ankr.com/solana"
   );
@@ -151,12 +151,13 @@ async function mint(){
   const tx = new solanaWeb3.Transaction().add(
     solanaWeb3.SystemProgram.transfer({
       fromPubkey: window.solana.publicKey,
-      toPubkey: new solanaWeb3.PublicKey("YOUR_WALLET_HERE"),
+      toPubkey: new solanaWeb3.PublicKey(data.to),
       lamports: sol * 1e9
     })
   );
 
   tx.feePayer = window.solana.publicKey;
+
   const { blockhash } = await connection.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
 
@@ -166,7 +167,7 @@ async function mint(){
   const verify = await fetch("/api/verify",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ wallet, signature:sig })
+    body: JSON.stringify({ wallet, signature:sig })
   });
 
   const result = await verify.json();
