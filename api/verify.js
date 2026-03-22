@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { verifyTx } from "../lib/verifyTx.js";
 import {
-  USD_TO_WAR,
-  MIN_USD,
-  MAX_USD,
+  MIN_SOL,
+  MAX_SOL,
+  SOL_TO_WAR,
   MAX_SUPPLY
 } from "../lib/config.js";
 
@@ -22,7 +22,6 @@ export default async function handler(req, res){
       return res.json({ error:"data tidak lengkap" });
     }
 
-    // anti double
     const { data:exist } = await supabase
       .from("presale")
       .select("*")
@@ -36,23 +35,15 @@ export default async function handler(req, res){
     const check = await verifyTx(signature);
 
     if(!check.ok){
-      return res.json({ error:check.error });
+      return res.json({ error:"tx tidak valid" });
     }
 
-    // ambil harga SOL
-    const r = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
-    );
+    const sol = check.sol;
 
-    const priceData = await r.json();
-    const solPrice = priceData.solana.usd;
+    if(sol < MIN_SOL) return res.json({ error:"Min 0.1 SOL" });
+    if(sol > MAX_SOL) return res.json({ error:"Max 1 SOL" });
 
-    const usd = check.sol * solPrice;
-
-    if(usd < MIN_USD) return res.json({ error:"min $0.5" });
-    if(usd > MAX_USD) return res.json({ error:"max $50" });
-
-    const war = Math.floor(usd * USD_TO_WAR);
+    const war = Math.floor(sol * SOL_TO_WAR);
 
     const { data:all } = await supabase
       .from("presale")
@@ -65,7 +56,7 @@ export default async function handler(req, res){
     }
 
     await supabase.from("presale").insert([
-      { wallet, usd, war, signature }
+      { wallet, sol, war, signature }
     ]);
 
     res.json({
