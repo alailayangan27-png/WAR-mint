@@ -54,7 +54,6 @@ export default async function handler(req, res){
 
     const war = Math.floor(usd * USD_TO_WAR);
 
-    // cek supply
     const { data:all } = await supabase
       .from("presale")
       .select("war");
