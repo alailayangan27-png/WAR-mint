@@ -4,16 +4,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WAR Presale</title>
 
+<!-- Solana -->
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+
+<!-- Cloudflare Turnstile -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
 <style>
 body{
   margin:0;
-  font-family:Arial;
+  font-family:Arial, sans-serif;
   color:white;
+  background:black;
   overflow:hidden;
 }
 
+/* Background Video */
 #bgVideo{
   position:fixed;
   width:100%;
@@ -23,6 +29,16 @@ body{
   filter:brightness(0.5);
 }
 
+/* Overlay */
+.overlay{
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.6);
+  z-index:-1;
+}
+
+/* Container */
 .container{
   position:absolute;
   top:50%;
@@ -32,12 +48,20 @@ body{
   max-width:420px;
   display:flex;
   flex-direction:column;
-  gap:12px;
-  background:rgba(0,0,0,0.6);
+  gap:14px;
+  background:rgba(0,0,0,0.7);
   padding:25px;
   border-radius:20px;
+  box-shadow:0 0 20px rgba(0,255,150,0.3);
 }
 
+/* Title */
+h2{
+  text-align:center;
+  margin:0;
+}
+
+/* Inputs */
 .row{
   display:flex;
   gap:10px;
@@ -47,19 +71,33 @@ input,button{
   padding:14px;
   border-radius:10px;
   border:none;
+  font-size:14px;
 }
 
-input{flex:1;}
+input{
+  flex:1;
+  background:#111;
+  color:white;
+}
 
+/* Buttons */
 button{
   background:#00ff99;
   cursor:pointer;
+  font-weight:bold;
+  transition:0.2s;
 }
 
+button:hover{
+  background:#00cc77;
+}
+
+/* Progress */
 .progress{
   height:8px;
   background:#222;
   border-radius:10px;
+  overflow:hidden;
 }
 
 .bar{
@@ -67,20 +105,38 @@ button{
   width:0%;
   background:#00ff99;
 }
+
+/* Status */
+#status{
+  font-size:13px;
+  text-align:center;
+  opacity:0.8;
+}
+
+/* Wallet */
+#wallet{
+  font-size:12px;
+  word-break:break-all;
+  opacity:0.7;
+  text-align:center;
+}
 </style>
 </head>
 
 <body>
 
+<!-- Background Video -->
 <video autoplay muted loop id="bgVideo">
   <source src="war.mp4" type="video/mp4">
 </video>
 
+<div class="overlay"></div>
+
 <div class="container">
 
-<h2>WAR PRESALE</h2>
+<h2>WAR TOKEN PRESALE</h2>
 
-<button id="walletBtn" onclick="toggleWallet()">Connect</button>
+<button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
 
 <div id="wallet"></div>
 
@@ -89,11 +145,14 @@ button{
   <button onclick="mint()">Mint</button>
 </div>
 
+<!-- CAPTCHA -->
+<div class="cf-turnstile" data-sitekey="SITE_KEY_KAMU"></div>
+
 <div class="progress">
   <div id="bar" class="bar"></div>
 </div>
 
-<div id="stats"></div>
+<div id="stats">Loading...</div>
 <div id="status"></div>
 
 </div>
@@ -101,14 +160,18 @@ button{
 <script>
 let wallet = null;
 
+// CONNECT / DISCONNECT
 async function toggleWallet(){
 
-  if(!window.solana) return alert("Use Phantom");
+  if(!window.solana){
+    return alert("Install Phantom Wallet");
+  }
 
   if(wallet){
     await window.solana.disconnect();
     wallet = null;
-    walletBtn.innerText = "Connect";
+    walletBtn.innerText = "Connect Wallet";
+    document.getElementById("wallet").innerText = "";
     return;
   }
 
@@ -116,65 +179,117 @@ async function toggleWallet(){
   wallet = res.publicKey.toString();
 
   walletBtn.innerText = "Disconnect";
+  document.getElementById("wallet").innerText = wallet;
 }
 
+// LOAD STATS
 async function loadStats(){
-  const res = await fetch("/api/stats");
-  const data = await res.json();
+  try{
+    const res = await fetch("/api/stats");
+    const data = await res.json();
 
-  document.getElementById("stats").innerText =
-    "Minted: " + data.totalWar;
+    document.getElementById("stats").innerText =
+      "Total Minted: " + (data.totalWar || 0) + " WAR";
+
+    const percent = Math.min((data.totalWar / 100000000) * 100, 100);
+    document.getElementById("bar").style.width = percent + "%";
+
+  }catch(e){
+    document.getElementById("stats").innerText = "Stats unavailable";
+  }
 }
 
-setInterval(loadStats,5000);
+setInterval(loadStats, 5000);
+loadStats();
 
+// GET CAPTCHA TOKEN
+function getCaptchaToken(){
+  const el = document.querySelector(".cf-turnstile textarea");
+  return el ? el.value : null;
+}
+
+// MINT FUNCTION
 async function mint(){
 
-  if(!wallet) return alert("Connect wallet");
+  if(!wallet){
+    return alert("Connect wallet first");
+  }
 
   const sol = Number(document.getElementById("sol").value);
 
-  const txData = await fetch("/api/createTx",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ wallet, amount: sol })
-  });
+  if(!sol || sol < 0.1 || sol > 1){
+    return alert("Invalid amount");
+  }
 
-  const data = await txData.json();
+  const captcha = getCaptchaToken();
 
-  if(data.error) return alert(data.error);
+  if(!captcha){
+    return alert("Complete captcha");
+  }
 
-  const connection = new solanaWeb3.Connection(
-    "https://rpc.ankr.com/solana"
-  );
+  document.getElementById("status").innerText = "Processing...";
 
-  const tx = new solanaWeb3.Transaction().add(
-    solanaWeb3.SystemProgram.transfer({
-      fromPubkey: window.solana.publicKey,
-      toPubkey: new solanaWeb3.PublicKey(data.to),
-      lamports: sol * 1e9
-    })
-  );
+  try{
 
-  tx.feePayer = window.solana.publicKey;
+    // 1. request tx from backend
+    const txData = await fetch("/api/createTx",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        wallet,
+        amount: sol,
+        captcha
+      })
+    });
 
-  const { blockhash } = await connection.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
+    const data = await txData.json();
 
-  const signed = await window.solana.signTransaction(tx);
-  const sig = await connection.sendRawTransaction(signed.serialize());
+    if(data.error){
+      return document.getElementById("status").innerText = data.error;
+    }
 
-  const verify = await fetch("/api/verify",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ wallet, signature:sig })
-  });
+    const connection = new solanaWeb3.Connection(
+      "https://rpc.ankr.com/solana"
+    );
 
-  const result = await verify.json();
+    // 2. build transaction
+    const tx = new solanaWeb3.Transaction().add(
+      solanaWeb3.SystemProgram.transfer({
+        fromPubkey: window.solana.publicKey,
+        toPubkey: new solanaWeb3.PublicKey(data.to),
+        lamports: sol * 1e9
+      })
+    );
 
-  document.getElementById("status").innerText =
-    result.error || ("Success: "+result.war+" WAR");
+    tx.feePayer = window.solana.publicKey;
 
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    // 3. sign + send
+    const signed = await window.solana.signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize());
+
+    document.getElementById("status").innerText = "Verifying...";
+
+    // 4. verify
+    const verify = await fetch("/api/verify",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        wallet,
+        signature: sig
+      })
+    });
+
+    const result = await verify.json();
+
+    document.getElementById("status").innerText =
+      result.error || ("Success: " + result.war + " WAR");
+
+  }catch(e){
+    document.getElementById("status").innerText = "Error occurred";
+  }
 }
 </script>
 
