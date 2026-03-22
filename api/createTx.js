@@ -1,33 +1,32 @@
-import { CONFIG } from "../lib/config.js";
-import { checkLimit } from "../lib/rateLimit.js";
-import { verifyCaptcha } from "../lib/captcha.js";
+import { supabase } from "../lib/db.js";
 
 export default async function handler(req, res){
 
-  const ip = req.headers["x-forwarded-for"] || "unknown";
+  const { wallet, amount } = req.body;
 
-  if(!checkLimit(ip)){
-    return res.json({ error:"Too many requests" });
-  }
-
-  const { wallet, amount, captcha } = req.body;
-
-  if(!wallet || !amount || !captcha){
+  if(!wallet || !amount){
     return res.json({ error:"Invalid request" });
   }
 
-  const human = await verifyCaptcha(captcha);
-
-  if(!human){
-    return res.json({ error:"Captcha failed" });
-  }
-
-  if(amount < CONFIG.MIN_SOL || amount > CONFIG.MAX_SOL){
+  if(amount < 0.1 || amount > 1){
     return res.json({ error:"Invalid amount" });
   }
 
+  const { data } = await supabase
+    .from("mints")
+    .select("*")
+    .eq("wallet", wallet)
+    .single();
+
+  let total = data?.total_sol || 0;
+
+  if(total + amount > 1){
+    return res.json({
+      error:"Max 1 SOL per wallet reached"
+    });
+  }
+
   return res.json({
-    to: CONFIG.RECEIVER,
-    amount
+    to: process.env.RECEIVER
   });
 }
