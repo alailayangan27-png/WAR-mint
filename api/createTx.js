@@ -1,25 +1,33 @@
 import { CONFIG } from "../lib/config.js";
+import { checkLimit } from "../lib/rateLimit.js";
+import { verifyCaptcha } from "../lib/captcha.js";
 
 export default async function handler(req, res){
 
-  try{
+  const ip = req.headers["x-forwarded-for"] || "unknown";
 
-    const { wallet, amount } = req.body;
-
-    if(!wallet || !amount){
-      return res.json({ error:"Invalid request" });
-    }
-
-    if(amount < CONFIG.MIN_SOL || amount > CONFIG.MAX_SOL){
-      return res.json({ error:"Invalid amount" });
-    }
-
-    return res.json({
-      to: CONFIG.RECEIVER,
-      amount
-    });
-
-  }catch(e){
-    res.json({ error:e.message });
+  if(!checkLimit(ip)){
+    return res.json({ error:"Too many requests" });
   }
+
+  const { wallet, amount, captcha } = req.body;
+
+  if(!wallet || !amount || !captcha){
+    return res.json({ error:"Invalid request" });
+  }
+
+  const human = await verifyCaptcha(captcha);
+
+  if(!human){
+    return res.json({ error:"Captcha failed" });
+  }
+
+  if(amount < CONFIG.MIN_SOL || amount > CONFIG.MAX_SOL){
+    return res.json({ error:"Invalid amount" });
+  }
+
+  return res.json({
+    to: CONFIG.RECEIVER,
+    amount
+  });
 }
