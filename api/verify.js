@@ -2,6 +2,7 @@ import { verifyTx } from "../lib/verifyTx.js";
 import { CONFIG } from "../lib/config.js";
 
 const used = new Set();
+let total = 0;
 
 export default async function handler(req, res){
 
@@ -20,7 +21,7 @@ export default async function handler(req, res){
     const result = await verifyTx(signature, wallet);
 
     if(!result.ok){
-      return res.json({ error:"Invalid transaction" });
+      return res.json({ error:"Invalid tx" });
     }
 
     if(result.sol < CONFIG.MIN_SOL || result.sol > CONFIG.MAX_SOL){
@@ -30,13 +31,15 @@ export default async function handler(req, res){
     used.add(signature);
 
     const war = result.sol * CONFIG.RATE;
+    total += war;
 
-    return res.json({
+    res.json({
       success:true,
-      war
+      war,
+      total
     });
 
   }catch(e){
-    return res.json({ error:e.message });
+    res.json({ error:e.message });
   }
 }
