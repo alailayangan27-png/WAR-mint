@@ -1,36 +1,39 @@
+import { supabase } from "../lib/db.js";
 import { verifyTx } from "../lib/verifyTx.js";
-import { CONFIG } from "../lib/config.js";
-import { checkLimit } from "../lib/rateLimit.js";
-
-const used = new Set();
 
 export default async function handler(req, res){
 
-  const ip = req.headers["x-forwarded-for"] || "unknown";
+  const { wallet, signature } = req.body;
 
-  if(!checkLimit(ip)){
-    return res.json({ error:"Too many requests" });
+  const tx = await verifyTx(signature, wallet);
+
+  if(!tx.ok){
+    return res.json({ error:"Invalid transaction" });
   }
 
-  const { signature, wallet } = req.body;
+  const sol = tx.sol;
 
-  if(used.has(signature)){
-    return res.json({ error:"Already used" });
+  const { data } = await supabase
+    .from("mints")
+    .select("*")
+    .eq("wallet", wallet)
+    .single();
+
+  let total = data?.total_sol || 0;
+
+  if(total + sol > 1){
+    return res.json({
+      error:"Limit exceeded"
+    });
   }
 
-  const result = await verifyTx(signature, wallet);
+  await supabase.from("mints").upsert({
+    wallet,
+    total_sol: total + sol
+  });
 
-  if(!result.ok){
-    return res.json({ error:"Invalid tx" });
-  }
-
-  if(result.sol < CONFIG.MIN_SOL || result.sol > CONFIG.MAX_SOL){
-    return res.json({ error:"Invalid amount" });
-  }
-
-  used.add(signature);
-
-  const war = result.sol * CONFIG.RATE;
-
-  res.json({ success:true, war });
+  return res.json({
+    success:true,
+    sol
+  });
 }
