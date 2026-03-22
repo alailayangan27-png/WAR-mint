@@ -16,73 +16,25 @@ body{
   height:100vh;
 }
 
-/* animated gradient */
-body::before{
-  content:"";
-  position:fixed;
-  width:200%;
-  height:200%;
-  background:linear-gradient(45deg,#00ff99,#001f3f,#ff0055);
-  animation:move 10s infinite linear;
-  z-index:-1;
-  opacity:0.2;
-}
-
-@keyframes move{
-  from{transform:translate(0,0)}
-  to{transform:translate(-50%,-50%)}
-}
-
 .container{
+  width:90%;
+  max-width:400px;
   background:rgba(255,255,255,0.05);
   padding:25px;
   border-radius:20px;
-  width:90%;
-  max-width:400px;
   text-align:center;
-  backdrop-filter:blur(15px);
-  box-shadow:0 0 30px rgba(0,255,150,0.2);
 }
 
-/* responsive */
-@media(min-width:768px){
-  .container{
-    max-width:450px;
-    padding:40px;
-  }
-}
-
-input{
+input, button{
   width:100%;
   padding:12px;
+  margin-top:10px;
   border-radius:10px;
   border:none;
-  margin-top:10px;
 }
 
 button{
-  width:100%;
-  padding:12px;
-  margin-top:15px;
-  border:none;
-  border-radius:10px;
-  background:linear-gradient(45deg,#00ff99,#00ccff);
-  font-weight:bold;
-  cursor:pointer;
-  transition:0.2s;
-}
-
-button:hover{
-  transform:scale(1.05);
-}
-
-h2{
-  margin-bottom:10px;
-}
-
-#stats{
-  font-size:14px;
-  opacity:0.7;
+  background:#00ff99;
 }
 </style>
 </head>
@@ -95,12 +47,11 @@ h2{
   <button onclick="connect()">Connect Wallet</button>
   <p id="wallet"></p>
 
-  <input id="usd" placeholder="Enter USD (0.5 - 50)">
+  <input id="sol" placeholder="Enter SOL (0.1 - 1)">
 
   <button onclick="mint()">MINT WAR</button>
 
   <p id="stats"></p>
-  <p id="info"></p>
   <p id="status"></p>
 </div>
 
@@ -109,11 +60,8 @@ let wallet = null;
 const receiver = "Egp6tFjnQV9pZ277rS2m16fQbFPKYeZKGQ5RVYd9Mxec";
 
 async function connect(){
-  if(!window.solana) return alert("Gunakan Phantom");
-
   const res = await window.solana.connect();
   wallet = res.publicKey.toString();
-
   document.getElementById("wallet").innerText = wallet;
 }
 
@@ -122,8 +70,7 @@ async function loadStats(){
   const data = await res.json();
 
   document.getElementById("stats").innerText =
-    "Minted: " + data.totalWar +
-    " WAR | Soldiers: " + data.totalMinters;
+    "Minted: " + data.totalWar + " WAR";
 }
 
 setInterval(loadStats,5000);
@@ -135,23 +82,20 @@ async function mint(){
 
     if(!wallet) return alert("Connect wallet dulu");
 
-    const usd = Number(document.getElementById("usd").value);
+    const sol = Number(document.getElementById("sol").value);
 
-    if(usd < 0.5) return alert("Min $0.5");
-    if(usd > 50) return alert("Max $50");
+    if(sol < 0.1) return alert("Min 0.1 SOL");
+    if(sol > 1) return alert("Max 1 SOL");
 
-    const priceRes = await fetch("/api/price");
-    const priceData = await priceRes.json();
-
-    const solAmount = usd / priceData.price;
-
-    const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=f425a1d0-c252-46fb-b61f-344f2a5e0b7c");
+    const connection = new solanaWeb3.Connection(
+      "https://mainnet.helius-rpc.com/?api-key=f425a1d0-c252-46fb-b61f-344f2a5e0b7c"
+    );
 
     const tx = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({
         fromPubkey: window.solana.publicKey,
         toPubkey: new solanaWeb3.PublicKey(receiver),
-        lamports: Math.floor(solAmount * 1e9)
+        lamports: Math.floor(sol * 1e9)
       })
     );
 
@@ -174,11 +118,8 @@ async function mint(){
 
     const result = await verify.json();
 
-    document.getElementById("info").innerText =
-      result.war ? "⚔️ " + result.war + " WAR acquired" : "";
-
     document.getElementById("status").innerText =
-      result.error || "✅ Success";
+      result.error || "✅ Success | " + result.war + " WAR";
 
     loadStats();
 
