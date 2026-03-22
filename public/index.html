@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAR Presale</title>
+
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
 <style>
@@ -10,13 +12,58 @@ body{
   font-family:Arial;
   background:#05070d;
   color:white;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
+  overflow:hidden;
 }
 
+/* background */
+.map{
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:url("https://i.imgur.com/8KZtK9H.png") center/cover no-repeat;
+  opacity:0.06;
+}
+
+/* nodes */
+.node{
+  position:absolute;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  animation:pulse 2s infinite;
+}
+.red{ background:#ff0044; }
+.blue{ background:#00ccff; }
+
+@keyframes pulse{
+  0%{transform:scale(1)}
+  50%{transform:scale(1.6)}
+  100%{transform:scale(1)}
+}
+
+/* attack line */
+.attack-line{
+  position:absolute;
+  height:2px;
+  background:linear-gradient(90deg,#ff0044,#00ccff);
+  transform-origin:left;
+}
+
+/* bullet */
+.bullet{
+  position:absolute;
+  width:6px;
+  height:6px;
+  background:#fff;
+  border-radius:50%;
+}
+
+/* UI */
 .container{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
   width:90%;
   max-width:400px;
   background:rgba(255,255,255,0.05);
@@ -35,34 +82,81 @@ input, button{
 
 button{
   background:#00ff99;
+  font-weight:bold;
+}
+
+.progress{
+  height:8px;
+  background:#222;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:10px;
+}
+
+.bar{
+  height:100%;
+  width:0%;
+  background:#00ff99;
+}
+
+.small{
+  font-size:12px;
+  opacity:0.7;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-  <h2>⚔️ WAR PRESALE</h2>
+<div class="map"></div>
 
-  <button onclick="connect()">Connect Wallet</button>
-  <p id="wallet"></p>
+<div class="node red" style="top:30%;left:20%"></div>
+<div class="node blue" style="top:50%;left:70%"></div>
+<div class="node red" style="top:70%;left:40%"></div>
+<div class="node blue" style="top:20%;left:60%"></div>
+
+<div class="container">
+
+  <h2>WAR PRESALE</h2>
+
+  <button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
+  <p id="wallet" class="small"></p>
 
   <input id="sol" placeholder="Enter SOL (0.1 - 1)">
 
-  <button onclick="mint()">MINT WAR</button>
+  <button onclick="mint()">Mint</button>
 
-  <p id="stats"></p>
-  <p id="status"></p>
+  <div class="progress">
+    <div id="bar" class="bar"></div>
+  </div>
+
+  <p id="stats" class="small"></p>
+  <p id="status" class="small"></p>
+
 </div>
 
 <script>
 let wallet = null;
-const receiver = "Egp6tFjnQV9pZ277rS2m16fQbFPKYeZKGQ5RVYd9Mxec";
 
-async function connect(){
+async function toggleWallet(){
+
+  if(!window.solana) return alert("Use Phantom");
+
+  if(wallet){
+    await window.solana.disconnect();
+    wallet = null;
+    document.getElementById("wallet").innerText = "";
+    document.getElementById("walletBtn").innerText = "Connect Wallet";
+    return;
+  }
+
   const res = await window.solana.connect();
   wallet = res.publicKey.toString();
-  document.getElementById("wallet").innerText = wallet;
+
+  document.getElementById("wallet").innerText =
+    wallet.slice(0,6)+"..."+wallet.slice(-4);
+
+  document.getElementById("walletBtn").innerText = "Disconnect";
 }
 
 async function loadStats(){
@@ -70,7 +164,10 @@ async function loadStats(){
   const data = await res.json();
 
   document.getElementById("stats").innerText =
-    "Minted: " + data.totalWar + " WAR";
+    "Minted: " + data.totalWar;
+
+  const percent = (data.totalWar / 100000000) * 100;
+  document.getElementById("bar").style.width = percent + "%";
 }
 
 setInterval(loadStats,5000);
@@ -80,12 +177,14 @@ async function mint(){
 
   try{
 
-    if(!wallet) return alert("Connect wallet dulu");
+    if(!wallet) return alert("Connect wallet first");
 
     const sol = Number(document.getElementById("sol").value);
 
-    if(sol < 0.1) return alert("Min 0.1 SOL");
-    if(sol > 1) return alert("Max 1 SOL");
+    if(sol < 0.1) return alert("Minimum 0.1 SOL");
+    if(sol > 1) return alert("Maximum 1 SOL");
+
+    const receiver = "Egp6tFjnQV9pZ277rS2m16fQbFPKYeZKGQ5RVYd9Mxec";
 
     const connection = new solanaWeb3.Connection(
       "https://mainnet.helius-rpc.com/?api-key=f425a1d0-c252-46fb-b61f-344f2a5e0b7c"
@@ -105,7 +204,6 @@ async function mint(){
     tx.recentBlockhash = blockhash;
 
     const signed = await window.solana.signTransaction(tx);
-
     const sig = await connection.sendRawTransaction(signed.serialize());
 
     document.getElementById("status").innerText = "TX: " + sig;
@@ -119,7 +217,7 @@ async function mint(){
     const result = await verify.json();
 
     document.getElementById("status").innerText =
-      result.error || "✅ Success | " + result.war + " WAR";
+      result.error || ("Success: " + result.war + " WAR");
 
     loadStats();
 
@@ -127,6 +225,68 @@ async function mint(){
     alert(e.message);
   }
 }
+
+/* war animation */
+const nodes = [
+  {x:20,y:30},
+  {x:70,y:50},
+  {x:40,y:70},
+  {x:60,y:20}
+];
+
+function createLine(x1,y1,x2,y2){
+  const line = document.createElement("div");
+  line.className = "attack-line";
+
+  const dx = x2-x1;
+  const dy = y2-y1;
+  const length = Math.sqrt(dx*dx+dy*dy);
+  const angle = Math.atan2(dy,dx)*180/Math.PI;
+
+  line.style.width = length + "vw";
+  line.style.left = x1 + "vw";
+  line.style.top = y1 + "vh";
+  line.style.transform = "rotate(" + angle + "deg)";
+
+  document.body.appendChild(line);
+  setTimeout(()=>line.remove(),1000);
+}
+
+function createBullet(x1,y1,x2,y2){
+  const b = document.createElement("div");
+  b.className = "bullet";
+  document.body.appendChild(b);
+
+  let t = 0;
+
+  const anim = setInterval(()=>{
+    t += 0.03;
+
+    if(t >= 1){
+      b.remove();
+      clearInterval(anim);
+      return;
+    }
+
+    const x = x1 + (x2-x1)*t;
+    const y = y1 + (y2-y1)*t;
+
+    b.style.left = x + "vw";
+    b.style.top = y + "vh";
+
+  },16);
+}
+
+function warLoop(){
+  const a = nodes[Math.floor(Math.random()*nodes.length)];
+  const b = nodes[Math.floor(Math.random()*nodes.length)];
+  if(a===b) return;
+
+  createLine(a.x,a.y,b.x,b.y);
+  createBullet(a.x,a.y,b.x,b.y);
+}
+
+setInterval(warLoop,800);
 </script>
 
 </body>
