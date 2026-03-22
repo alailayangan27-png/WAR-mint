@@ -1,22 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+let total = 0;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY
-);
-
-export default async function handler(req, res){
-
-  const { data } = await supabase
-    .from("presale")
-    .select("wallet, war");
-
-  const totalWar = data.reduce((a,b)=>a+(b.war||0),0);
-
-  const wallets = new Set(data.map(i=>i.wallet));
+export default function handler(req, res){
 
   res.json({
-    totalWar,
-    totalMinters: wallets.size
+    totalWar: total
   });
+
 }
