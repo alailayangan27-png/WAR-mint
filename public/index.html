@@ -145,7 +145,7 @@ async function mint(){
 
     const solAmount = usd / priceData.price;
 
-    const connection = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
+    const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=f425a1d0-c252-46fb-b61f-344f2a5e0b7c");
 
     const tx = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({
