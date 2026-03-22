@@ -10,55 +10,32 @@
 body{
   margin:0;
   font-family:Arial;
-  background:#05070d;
   color:white;
   overflow:hidden;
 }
 
-/* background */
-.map{
+/* VIDEO BACKGROUND */
+#bgVideo{
+  position:fixed;
+  right:0;
+  bottom:0;
+  min-width:100%;
+  min-height:100%;
+  object-fit:cover;
+  z-index:-2;
+  filter:brightness(0.4) blur(2px);
+}
+
+/* DARK OVERLAY */
+.overlay{
   position:fixed;
   width:100%;
   height:100%;
-  background:url("https://i.imgur.com/8KZtK9H.png") center/cover no-repeat;
-  opacity:0.06;
+  background:rgba(0,0,0,0.5);
+  z-index:-1;
 }
 
-/* nodes */
-.node{
-  position:absolute;
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  animation:pulse 2s infinite;
-}
-.red{ background:#ff0044; }
-.blue{ background:#00ccff; }
-
-@keyframes pulse{
-  0%{transform:scale(1)}
-  50%{transform:scale(1.6)}
-  100%{transform:scale(1)}
-}
-
-/* attack line */
-.attack-line{
-  position:absolute;
-  height:2px;
-  background:linear-gradient(90deg,#ff0044,#00ccff);
-  transform-origin:left;
-}
-
-/* bullet */
-.bullet{
-  position:absolute;
-  width:6px;
-  height:6px;
-  background:#fff;
-  border-radius:50%;
-}
-
-/* UI */
+/* UI CONTAINER */
 .container{
   position:absolute;
   top:50%;
@@ -66,12 +43,14 @@ body{
   transform:translate(-50%,-50%);
   width:90%;
   max-width:400px;
-  background:rgba(255,255,255,0.05);
+  background:rgba(0,0,0,0.6);
   padding:25px;
   border-radius:20px;
   text-align:center;
+  backdrop-filter:blur(10px);
 }
 
+/* INPUT & BUTTON */
 input, button{
   width:100%;
   padding:12px;
@@ -83,8 +62,16 @@ input, button{
 button{
   background:#00ff99;
   font-weight:bold;
+  cursor:pointer;
 }
 
+/* TEXT */
+.small{
+  font-size:12px;
+  opacity:0.7;
+}
+
+/* PROGRESS BAR */
 .progress{
   height:8px;
   background:#222;
@@ -99,21 +86,40 @@ button{
   background:#00ff99;
 }
 
-.small{
-  font-size:12px;
-  opacity:0.7;
+/* BULLET */
+.bullet{
+  position:absolute;
+  width:6px;
+  height:6px;
+  background:#fff;
+  border-radius:50%;
+}
+
+/* EXPLOSION */
+.explosion{
+  position:absolute;
+  width:20px;
+  height:20px;
+  background:radial-gradient(circle,#fff,#ff0044,transparent);
+  border-radius:50%;
+  animation:boom 0.4s ease-out;
+}
+
+@keyframes boom{
+  from{transform:scale(0.5);opacity:1;}
+  to{transform:scale(3);opacity:0;}
 }
 </style>
 </head>
 
 <body>
 
-<div class="map"></div>
+<!-- VIDEO -->
+<video autoplay muted loop playsinline id="bgVideo">
+  <source src="https://x.com/i/status/2033005093029617790" type="video/mp4">
+</video>
 
-<div class="node red" style="top:30%;left:20%"></div>
-<div class="node blue" style="top:50%;left:70%"></div>
-<div class="node red" style="top:70%;left:40%"></div>
-<div class="node blue" style="top:20%;left:60%"></div>
+<div class="overlay"></div>
 
 <div class="container">
 
@@ -138,6 +144,7 @@ button{
 <script>
 let wallet = null;
 
+/* CONNECT / DISCONNECT */
 async function toggleWallet(){
 
   if(!window.solana) return alert("Use Phantom");
@@ -159,6 +166,7 @@ async function toggleWallet(){
   document.getElementById("walletBtn").innerText = "Disconnect";
 }
 
+/* LOAD STATS */
 async function loadStats(){
   const res = await fetch("/api/stats");
   const data = await res.json();
@@ -173,6 +181,7 @@ async function loadStats(){
 setInterval(loadStats,5000);
 loadStats();
 
+/* MINT */
 async function mint(){
 
   try{
@@ -226,33 +235,22 @@ async function mint(){
   }
 }
 
-/* war animation */
-const nodes = [
-  {x:20,y:30},
-  {x:70,y:50},
-  {x:40,y:70},
-  {x:60,y:20}
-];
-
-function createLine(x1,y1,x2,y2){
-  const line = document.createElement("div");
-  line.className = "attack-line";
-
-  const dx = x2-x1;
-  const dy = y2-y1;
-  const length = Math.sqrt(dx*dx+dy*dy);
-  const angle = Math.atan2(dy,dx)*180/Math.PI;
-
-  line.style.width = length + "vw";
-  line.style.left = x1 + "vw";
-  line.style.top = y1 + "vh";
-  line.style.transform = "rotate(" + angle + "deg)";
-
-  document.body.appendChild(line);
-  setTimeout(()=>line.remove(),1000);
+/* WAR EFFECT */
+function explosion(x,y){
+  const e = document.createElement("div");
+  e.className = "explosion";
+  e.style.left = x + "vw";
+  e.style.top = y + "vh";
+  document.body.appendChild(e);
+  setTimeout(()=>e.remove(),400);
 }
 
-function createBullet(x1,y1,x2,y2){
+function shoot(){
+  const x1 = Math.random()*100;
+  const y1 = Math.random()*100;
+  const x2 = Math.random()*100;
+  const y2 = Math.random()*100;
+
   const b = document.createElement("div");
   b.className = "bullet";
   document.body.appendChild(b);
@@ -263,6 +261,7 @@ function createBullet(x1,y1,x2,y2){
     t += 0.03;
 
     if(t >= 1){
+      explosion(x2,y2);
       b.remove();
       clearInterval(anim);
       return;
@@ -277,17 +276,8 @@ function createBullet(x1,y1,x2,y2){
   },16);
 }
 
-function warLoop(){
-  const a = nodes[Math.floor(Math.random()*nodes.length)];
-  const b = nodes[Math.floor(Math.random()*nodes.length)];
-  if(a===b) return;
-
-  createLine(a.x,a.y,b.x,b.y);
-  createBullet(a.x,a.y,b.x,b.y);
-}
-
-setInterval(warLoop,800);
+setInterval(shoot,900);
 </script>
 
 </body>
-</html>
+  </html>
