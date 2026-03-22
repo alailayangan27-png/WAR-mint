@@ -14,7 +14,7 @@ body{
   overflow:hidden;
 }
 
-/* VIDEO BACKGROUND */
+/* VIDEO */
 #bgVideo{
   position:fixed;
   right:0;
@@ -23,46 +23,69 @@ body{
   min-height:100%;
   object-fit:cover;
   z-index:-2;
-  filter:brightness(0.4) blur(2px);
+  filter:brightness(0.6);
 }
 
-/* DARK OVERLAY */
+/* OVERLAY */
 .overlay{
   position:fixed;
   width:100%;
   height:100%;
-  background:rgba(0,0,0,0.5);
+  background:linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6));
   z-index:-1;
 }
 
-/* UI CONTAINER */
+/* CONTAINER */
 .container{
   position:absolute;
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
   width:90%;
-  max-width:400px;
+  max-width:420px;
+
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+
   background:rgba(0,0,0,0.6);
   padding:25px;
   border-radius:20px;
-  text-align:center;
   backdrop-filter:blur(10px);
+
+  border:1px solid rgba(0,255,150,0.2);
+  box-shadow:0 0 30px rgba(0,255,150,0.15);
 }
 
-/* INPUT & BUTTON */
+/* INPUT + BUTTON */
 input, button{
-  width:100%;
-  padding:12px;
-  margin-top:10px;
-  border-radius:10px;
+  padding:14px;
+  border-radius:12px;
   border:none;
+  font-size:14px;
 }
 
+/* INPUT */
+input{
+  flex:1;
+}
+
+/* BUTTON */
 button{
-  background:#00ff99;
+  background:linear-gradient(45deg,#00ff99,#00ccff);
   font-weight:bold;
   cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover{
+  transform:scale(1.05);
+}
+
+/* FLEX ROW */
+.row{
+  display:flex;
+  gap:10px;
 }
 
 /* TEXT */
@@ -71,50 +94,26 @@ button{
   opacity:0.7;
 }
 
-/* PROGRESS BAR */
+/* PROGRESS */
 .progress{
   height:8px;
   background:#222;
   border-radius:10px;
   overflow:hidden;
-  margin-top:10px;
 }
 
 .bar{
   height:100%;
   width:0%;
-  background:#00ff99;
-}
-
-/* BULLET */
-.bullet{
-  position:absolute;
-  width:6px;
-  height:6px;
-  background:#fff;
-  border-radius:50%;
-}
-
-/* EXPLOSION */
-.explosion{
-  position:absolute;
-  width:20px;
-  height:20px;
-  background:radial-gradient(circle,#fff,#ff0044,transparent);
-  border-radius:50%;
-  animation:boom 0.4s ease-out;
-}
-
-@keyframes boom{
-  from{transform:scale(0.5);opacity:1;}
-  to{transform:scale(3);opacity:0;}
+  background:linear-gradient(90deg,#00ff99,#00ccff);
+  transition:0.4s;
 }
 </style>
 </head>
 
 <body>
 
-<!-- VIDEO -->
+<!-- VIDEO BACKGROUND -->
 <video autoplay muted loop playsinline id="bgVideo">
   <source src="war.mp4" type="video/mp4">
 </video>
@@ -125,19 +124,26 @@ button{
 
   <h2>WAR PRESALE</h2>
 
-  <button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
-  <p id="wallet" class="small"></p>
+  <!-- CONNECT -->
+  <div class="row">
+    <button id="walletBtn" onclick="toggleWallet()">Connect</button>
+  </div>
 
-  <input id="sol" placeholder="Enter SOL (0.1 - 1)">
+  <div id="wallet" class="small"></div>
 
-  <button onclick="mint()">Mint</button>
+  <!-- INPUT + MINT -->
+  <div class="row">
+    <input id="sol" placeholder="0.1 - 1 SOL">
+    <button onclick="mint()">Mint</button>
+  </div>
 
+  <!-- PROGRESS -->
   <div class="progress">
     <div id="bar" class="bar"></div>
   </div>
 
-  <p id="stats" class="small"></p>
-  <p id="status" class="small"></p>
+  <div id="stats" class="small"></div>
+  <div id="status" class="small"></div>
 
 </div>
 
@@ -153,7 +159,7 @@ async function toggleWallet(){
     await window.solana.disconnect();
     wallet = null;
     document.getElementById("wallet").innerText = "";
-    document.getElementById("walletBtn").innerText = "Connect Wallet";
+    document.getElementById("walletBtn").innerText = "Connect";
     return;
   }
 
@@ -234,50 +240,7 @@ async function mint(){
     alert(e.message);
   }
 }
-
-/* WAR EFFECT */
-function explosion(x,y){
-  const e = document.createElement("div");
-  e.className = "explosion";
-  e.style.left = x + "vw";
-  e.style.top = y + "vh";
-  document.body.appendChild(e);
-  setTimeout(()=>e.remove(),400);
-}
-
-function shoot(){
-  const x1 = Math.random()*100;
-  const y1 = Math.random()*100;
-  const x2 = Math.random()*100;
-  const y2 = Math.random()*100;
-
-  const b = document.createElement("div");
-  b.className = "bullet";
-  document.body.appendChild(b);
-
-  let t = 0;
-
-  const anim = setInterval(()=>{
-    t += 0.03;
-
-    if(t >= 1){
-      explosion(x2,y2);
-      b.remove();
-      clearInterval(anim);
-      return;
-    }
-
-    const x = x1 + (x2-x1)*t;
-    const y = y1 + (y2-y1)*t;
-
-    b.style.left = x + "vw";
-    b.style.top = y + "vh";
-
-  },16);
-}
-
-setInterval(shoot,900);
 </script>
 
 </body>
-  </html>
+</html>
