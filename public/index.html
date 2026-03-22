@@ -1,40 +1,113 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#05070d;
+  color:white;
+  text-align:center;
+  overflow:hidden;
+}
+
+/* background animasi */
+.bg{
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(0,255,150,0.1), transparent),
+    radial-gradient(circle at 80% 70%, rgba(255,0,100,0.1), transparent);
+  animation: move 10s infinite alternate;
+}
+
+@keyframes move{
+  from{transform:translateY(0)}
+  to{transform:translateY(-50px)}
+}
+
+/* container */
+.card{
+  position:relative;
+  top:50%;
+  transform:translateY(-50%);
+  background:rgba(255,255,255,0.05);
+  padding:30px;
+  border-radius:20px;
+  backdrop-filter:blur(10px);
+  box-shadow:0 0 30px rgba(0,255,150,0.2);
+}
+
+/* input */
+input{
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  width:200px;
+  margin:10px;
+}
+
+/* button */
+button{
+  padding:12px 20px;
+  border:none;
+  border-radius:10px;
+  background:linear-gradient(45deg,#00ff99,#00ccff);
+  color:black;
+  font-weight:bold;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover{
+  transform:scale(1.05);
+}
+
+#stats{
+  margin-top:10px;
+  opacity:0.8;
+}
+</style>
 </head>
 
-<body style="background:#0b0b0f;color:white;text-align:center">
+<body>
 
-<h2>🔥 WAR PRESALE</h2>
+<div class="bg"></div>
 
-<button onclick="connect()">Connect Wallet</button>
-<p id="wallet"></p>
+<div class="card">
+  <h2>⚔️ WAR PRESALE</h2>
 
-<input id="usd" placeholder="USD (0.5 - 50)">
+  <button onclick="connect()">Connect Wallet</button>
+  <p id="wallet"></p>
 
-<br><br>
+  <input id="usd" placeholder="Enter USD (0.5 - 50)">
 
-<button onclick="mint()">MINT WAR</button>
+  <br>
 
-<p id="price"></p>
-<p id="stats"></p>
-<p id="info"></p>
-<p id="status"></p>
+  <button onclick="mint()">MINT WAR</button>
+
+  <p id="stats"></p>
+  <p id="info"></p>
+  <p id="status"></p>
+</div>
 
 <script>
 let wallet = null;
-let solPrice = 0;
 
 const receiver = "ISI_WALLET_KAMU";
 
-async function loadPrice(){
-  const res = await fetch("/api/price");
-  const data = await res.json();
-  solPrice = data.price;
+async function connect(){
+  if(!window.solana) return alert("Gunakan Phantom");
 
-  document.getElementById("price").innerText =
-    "SOL Price: $" + solPrice;
+  const res = await window.solana.connect();
+  wallet = res.publicKey.toString();
+
+  document.getElementById("wallet").innerText = wallet;
 }
 
 async function loadStats(){
@@ -43,64 +116,68 @@ async function loadStats(){
 
   document.getElementById("stats").innerText =
     "Minted: " + data.totalWar +
-    " WAR | Minters: " + data.totalMinters;
+    " WAR | Soldiers: " + data.totalMinters;
 }
 
 setInterval(loadStats, 5000);
 loadStats();
-loadPrice();
-
-async function connect(){
-  const res = await window.solana.connect();
-  wallet = res.publicKey.toString();
-  document.getElementById("wallet").innerText = wallet;
-}
 
 async function mint(){
 
-  const usd = Number(document.getElementById("usd").value);
+  try{
 
-  if(usd < 0.5) return alert("Min $0.5");
-  if(usd > 50) return alert("Max $50");
+    if(!wallet) return alert("Connect wallet dulu");
 
-  const solAmount = usd / solPrice;
+    const usd = Number(document.getElementById("usd").value);
 
-  const connection = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
+    if(usd < 0.5) return alert("Min $0.5");
+    if(usd > 50) return alert("Max $50");
 
-  const tx = new solanaWeb3.Transaction().add(
-    solanaWeb3.SystemProgram.transfer({
-      fromPubkey: window.solana.publicKey,
-      toPubkey: new solanaWeb3.PublicKey(receiver),
-      lamports: solAmount * 1e9
-    })
-  );
+    const res = await fetch("/api/price");
+    const data = await res.json();
 
-  tx.feePayer = window.solana.publicKey;
+    const solAmount = usd / data.price;
 
-  const { blockhash } = await connection.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
+    const connection = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
 
-  const signed = await window.solana.signTransaction(tx);
+    const tx = new solanaWeb3.Transaction().add(
+      solanaWeb3.SystemProgram.transfer({
+        fromPubkey: window.solana.publicKey,
+        toPubkey: new solanaWeb3.PublicKey(receiver),
+        lamports: Math.floor(solAmount * 1e9)
+      })
+    );
 
-  const sig = await connection.sendRawTransaction(signed.serialize());
+    tx.feePayer = window.solana.publicKey;
 
-  document.getElementById("status").innerText = "TX: " + sig;
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
 
-  const res = await fetch("/api/verify",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ wallet, signature:sig })
-  });
+    const signed = await window.solana.signTransaction(tx);
 
-  const data = await res.json();
+    const sig = await connection.sendRawTransaction(signed.serialize());
 
-  document.getElementById("info").innerText =
-    data.war ? "You get " + data.war + " WAR" : "";
+    document.getElementById("status").innerText = "TX: " + sig;
 
-  document.getElementById("status").innerText =
-    data.error || "✅ Success";
+    const verify = await fetch("/api/verify",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ wallet, signature:sig })
+    });
 
-  loadStats();
+    const result = await verify.json();
+
+    document.getElementById("info").innerText =
+      result.war ? "⚔️ You received " + result.war + " WAR" : "";
+
+    document.getElementById("status").innerText =
+      result.error || "✅ Success";
+
+    loadStats();
+
+  }catch(e){
+    alert("Error: " + e.message);
+  }
 }
 </script>
 
