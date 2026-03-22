@@ -1,44 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WAR Presale</title>
-
-<!-- Solana -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
-
-<!-- CAPTCHA -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
 <style>
 body{
   margin:0;
-  font-family:Arial;
-  color:white;
   background:black;
-  overflow:hidden;
+  color:white;
+  font-family:Arial;
 }
 
-/* VIDEO BG */
-#bg{
-  position:fixed;
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  z-index:-2;
-  filter:brightness(0.6);
-}
-
-/* OVERLAY */
-.overlay{
-  position:fixed;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.6);
-  z-index:-1;
-}
-
-/* CARD */
 .box{
   position:absolute;
   top:50%;
@@ -46,104 +19,45 @@ body{
   transform:translate(-50%,-50%);
   width:90%;
   max-width:400px;
-  background:rgba(0,0,0,0.7);
-  padding:25px;
-  border-radius:18px;
+  background:#111;
+  padding:20px;
+  border-radius:15px;
   display:flex;
   flex-direction:column;
-  gap:12px;
-}
-
-/* TITLE */
-h2{
-  text-align:center;
-  margin:0;
-}
-
-/* INPUT ROW */
-.row{
-  display:flex;
   gap:10px;
 }
 
-/* INPUT */
-input{
-  flex:1;
-  padding:12px;
-  border-radius:10px;
-  border:none;
-  background:#111;
-  color:white;
-}
-
-/* BUTTON */
 button{
   padding:12px;
+  background:#00ff99;
   border:none;
   border-radius:10px;
-  background:#00ff99;
   font-weight:bold;
-  cursor:pointer;
 }
 
-/* PROGRESS */
-.progress{
-  height:8px;
-  background:#222;
+input{
+  padding:12px;
   border-radius:10px;
-  overflow:hidden;
-}
-
-.bar{
-  height:100%;
-  width:0%;
-  background:#00ff99;
-}
-
-/* TEXT */
-#wallet{
-  font-size:12px;
-  word-break:break-all;
-  text-align:center;
-}
-
-#status{
-  text-align:center;
-  font-size:13px;
+  border:none;
+  background:#222;
+  color:white;
 }
 </style>
 </head>
 
 <body>
 
-<video autoplay muted loop id="bg">
-  <source src="war.mp4" type="video/mp4">
-</video>
-
-<div class="overlay"></div>
-
 <div class="box">
 
-<h2>WAR TOKEN PRESALE</h2>
+<h2>WAR PRESALE</h2>
 
-<button id="btn" onclick="toggleWallet()">Connect Wallet</button>
+<button onclick="connect()">Connect Wallet</button>
 
 <div id="wallet"></div>
 
-<div class="row">
-  <input id="sol" placeholder="0.1 - 1 SOL">
-  <button onclick="mint()">Mint</button>
-</div>
+<input id="amount" placeholder="0.1 - 1 SOL">
 
-<!-- CAPTCHA FIX -->
-<div class="cf-turnstile"
-     data-sitekey="0x4AAAAAACummMSelqc_NBuB"
-     data-callback="onCaptcha">
-</div>
-
-<div class="progress">
-  <div id="bar" class="bar"></div>
-</div>
+<button onclick="mint()">Mint</button>
 
 <div id="status"></div>
 
@@ -151,112 +65,62 @@ button{
 
 <script>
 let wallet = null;
-let captchaToken = null;
 
-// CAPTCHA CALLBACK
-function onCaptcha(token){
-  captchaToken = token;
-}
-
-// CONNECT / DISCONNECT
-async function toggleWallet(){
-
-  if(!window.solana){
-    return alert("Install Phantom");
-  }
-
-  if(wallet){
-    await window.solana.disconnect();
-    wallet = null;
-    btn.innerText = "Connect Wallet";
-    document.getElementById("wallet").innerText = "";
-    return;
-  }
-
+async function connect(){
   const res = await window.solana.connect();
   wallet = res.publicKey.toString();
-
-  btn.innerText = "Disconnect";
   document.getElementById("wallet").innerText = wallet;
 }
 
-// MINT
 async function mint(){
 
-  if(!wallet){
-    return alert("Connect wallet first");
+  const amount = Number(document.getElementById("amount").value);
+
+  const req = await fetch("/api/createTx",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ wallet, amount })
+  });
+
+  const data = await req.json();
+
+  if(data.error){
+    return alert(data.error);
   }
 
-  const sol = Number(document.getElementById("sol").value);
+  const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
 
-  if(!sol || sol < 0.1 || sol > 1){
-    return alert("Invalid amount");
-  }
+  const tx = new solanaWeb3.Transaction().add(
+    solanaWeb3.SystemProgram.transfer({
+      fromPubkey: window.solana.publicKey,
+      toPubkey: new solanaWeb3.PublicKey(data.to),
+      lamports: amount * 1e9
+    })
+  );
 
-  if(!captchaToken){
-    return alert("Complete captcha");
-  }
+  tx.feePayer = window.solana.publicKey;
 
-  document.getElementById("status").innerText = "Processing...";
+  const { blockhash } = await conn.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
 
-  try{
+  const signed = await window.solana.signTransaction(tx);
+  const sig = await conn.sendRawTransaction(signed.serialize());
 
-    // REQUEST BACKEND
-    const req = await fetch("/api/createTx",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        wallet,
-        amount: sol,
-        captcha: captchaToken
-      })
-    });
+  document.getElementById("status").innerText = "Verifying...";
 
-    const data = await req.json();
+  const verify = await fetch("/api/verify",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      wallet,
+      signature: sig
+    })
+  });
 
-    if(data.error){
-      return document.getElementById("status").innerText = data.error;
-    }
+  const result = await verify.json();
 
-    const conn = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
-
-    const tx = new solanaWeb3.Transaction().add(
-      solanaWeb3.SystemProgram.transfer({
-        fromPubkey: window.solana.publicKey,
-        toPubkey: new solanaWeb3.PublicKey(data.to),
-        lamports: sol * 1e9
-      })
-    );
-
-    tx.feePayer = window.solana.publicKey;
-
-    const { blockhash } = await conn.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
-
-    const signed = await window.solana.signTransaction(tx);
-    const sig = await conn.sendRawTransaction(signed.serialize());
-
-    document.getElementById("status").innerText = "Verifying...";
-
-    const verify = await fetch("/api/verify",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        wallet,
-        signature: sig
-      })
-    });
-
-    const result = await verify.json();
-
-    document.getElementById("status").innerText =
-      result.error || ("Success: " + result.war + " WAR");
-
-    captchaToken = null;
-
-  }catch(e){
-    document.getElementById("status").innerText = "Error";
-  }
+  document.getElementById("status").innerText =
+    result.error || "Success";
 }
 </script>
 
