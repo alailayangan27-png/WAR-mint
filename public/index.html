@@ -14,28 +14,23 @@ body{
   overflow:hidden;
 }
 
-/* VIDEO */
 #bgVideo{
   position:fixed;
-  right:0;
-  bottom:0;
-  min-width:100%;
-  min-height:100%;
+  width:100%;
+  height:100%;
   object-fit:cover;
   z-index:-2;
   filter:brightness(0.6);
 }
 
-/* OVERLAY */
 .overlay{
   position:fixed;
   width:100%;
   height:100%;
-  background:linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.6));
+  background:rgba(0,0,0,0.5);
   z-index:-1;
 }
 
-/* CONTAINER */
 .container{
   position:absolute;
   top:50%;
@@ -43,78 +38,49 @@ body{
   transform:translate(-50%,-50%);
   width:90%;
   max-width:420px;
-
   display:flex;
   flex-direction:column;
   gap:12px;
-
   background:rgba(0,0,0,0.6);
   padding:25px;
   border-radius:20px;
-  backdrop-filter:blur(10px);
-
-  border:1px solid rgba(0,255,150,0.2);
-  box-shadow:0 0 30px rgba(0,255,150,0.15);
 }
 
-/* INPUT + BUTTON */
-input, button{
-  padding:14px;
-  border-radius:12px;
-  border:none;
-  font-size:14px;
-}
-
-/* INPUT */
-input{
-  flex:1;
-}
-
-/* BUTTON */
-button{
-  background:linear-gradient(45deg,#00ff99,#00ccff);
-  font-weight:bold;
-  cursor:pointer;
-  transition:0.2s;
-}
-
-button:hover{
-  transform:scale(1.05);
-}
-
-/* FLEX ROW */
 .row{
   display:flex;
   gap:10px;
 }
 
-/* TEXT */
-.small{
-  font-size:12px;
-  opacity:0.7;
+input,button{
+  padding:14px;
+  border-radius:10px;
+  border:none;
 }
 
-/* PROGRESS */
+input{flex:1;}
+
+button{
+  background:#00ff99;
+  cursor:pointer;
+}
+
 .progress{
   height:8px;
   background:#222;
   border-radius:10px;
-  overflow:hidden;
 }
 
 .bar{
   height:100%;
   width:0%;
-  background:linear-gradient(90deg,#00ff99,#00ccff);
-  transition:0.4s;
+  background:#00ff99;
 }
 </style>
 </head>
 
 <body>
 
-<!-- VIDEO BACKGROUND -->
-<video autoplay muted loop playsinline id="bgVideo">
+<video autoplay muted loop id="bgVideo">
   <source src="war.mp4" type="video/mp4">
 </video>
 
@@ -122,35 +88,29 @@ button:hover{
 
 <div class="container">
 
-  <h2>WAR PRESALE</h2>
+<h2>WAR PRESALE</h2>
 
-  <!-- CONNECT -->
-  <div class="row">
-    <button id="walletBtn" onclick="toggleWallet()">Connect</button>
-  </div>
+<button id="walletBtn" onclick="toggleWallet()">Connect</button>
 
-  <div id="wallet" class="small"></div>
+<div id="wallet"></div>
 
-  <!-- INPUT + MINT -->
-  <div class="row">
-    <input id="sol" placeholder="0.1 - 1 SOL">
-    <button onclick="mint()">Mint</button>
-  </div>
+<div class="row">
+  <input id="sol" placeholder="0.1 - 1 SOL">
+  <button onclick="mint()">Mint</button>
+</div>
 
-  <!-- PROGRESS -->
-  <div class="progress">
-    <div id="bar" class="bar"></div>
-  </div>
+<div class="progress">
+  <div id="bar" class="bar"></div>
+</div>
 
-  <div id="stats" class="small"></div>
-  <div id="status" class="small"></div>
+<div id="stats"></div>
+<div id="status"></div>
 
 </div>
 
 <script>
 let wallet = null;
 
-/* CONNECT / DISCONNECT */
 async function toggleWallet(){
 
   if(!window.solana) return alert("Use Phantom");
@@ -158,87 +118,62 @@ async function toggleWallet(){
   if(wallet){
     await window.solana.disconnect();
     wallet = null;
-    document.getElementById("wallet").innerText = "";
-    document.getElementById("walletBtn").innerText = "Connect";
+    walletBtn.innerText = "Connect";
     return;
   }
 
   const res = await window.solana.connect();
   wallet = res.publicKey.toString();
 
-  document.getElementById("wallet").innerText =
-    wallet.slice(0,6)+"..."+wallet.slice(-4);
-
-  document.getElementById("walletBtn").innerText = "Disconnect";
+  walletBtn.innerText = "Disconnect";
 }
 
-/* LOAD STATS */
 async function loadStats(){
   const res = await fetch("/api/stats");
   const data = await res.json();
 
   document.getElementById("stats").innerText =
     "Minted: " + data.totalWar;
-
-  const percent = (data.totalWar / 100000000) * 100;
-  document.getElementById("bar").style.width = percent + "%";
 }
 
 setInterval(loadStats,5000);
-loadStats();
 
-/* MINT */
 async function mint(){
 
-  try{
+  if(!wallet) return alert("Connect wallet");
 
-    if(!wallet) return alert("Connect wallet first");
+  const sol = Number(document.getElementById("sol").value);
 
-    const sol = Number(document.getElementById("sol").value);
+  const connection = new solanaWeb3.Connection(
+    "https://rpc.ankr.com/solana"
+  );
 
-    if(sol < 0.1) return alert("Minimum 0.1 SOL");
-    if(sol > 1) return alert("Maximum 1 SOL");
+  const tx = new solanaWeb3.Transaction().add(
+    solanaWeb3.SystemProgram.transfer({
+      fromPubkey: window.solana.publicKey,
+      toPubkey: new solanaWeb3.PublicKey("YOUR_WALLET_HERE"),
+      lamports: sol * 1e9
+    })
+  );
 
-    const receiver = "Egp6tFjnQV9pZ277rS2m16fQbFPKYeZKGQ5RVYd9Mxec";
+  tx.feePayer = window.solana.publicKey;
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
 
-    const connection = new solanaWeb3.Connection(
-      "https://mainnet.helius-rpc.com/?api-key=f425a1d0-c252-46fb-b61f-344f2a5e0b7c"
-    );
+  const signed = await window.solana.signTransaction(tx);
+  const sig = await connection.sendRawTransaction(signed.serialize());
 
-    const tx = new solanaWeb3.Transaction().add(
-      solanaWeb3.SystemProgram.transfer({
-        fromPubkey: window.solana.publicKey,
-        toPubkey: new solanaWeb3.PublicKey(receiver),
-        lamports: Math.floor(sol * 1e9)
-      })
-    );
+  const verify = await fetch("/api/verify",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ wallet, signature:sig })
+  });
 
-    tx.feePayer = window.solana.publicKey;
+  const result = await verify.json();
 
-    const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
+  document.getElementById("status").innerText =
+    result.error || ("Success: "+result.war+" WAR");
 
-    const signed = await window.solana.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize());
-
-    document.getElementById("status").innerText = "TX: " + sig;
-
-    const verify = await fetch("/api/verify",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ wallet, signature:sig })
-    });
-
-    const result = await verify.json();
-
-    document.getElementById("status").innerText =
-      result.error || ("Success: " + result.war + " WAR");
-
-    loadStats();
-
-  }catch(e){
-    alert(e.message);
-  }
 }
 </script>
 
