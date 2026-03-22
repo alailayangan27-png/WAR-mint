@@ -1,71 +1,42 @@
-import { createClient } from "@supabase/supabase-js";
 import { verifyTx } from "../lib/verifyTx.js";
-import {
-  MIN_SOL,
-  MAX_SOL,
-  SOL_TO_WAR,
-  MAX_SUPPLY
-} from "../lib/config.js";
+import { CONFIG } from "../lib/config.js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY
-);
+const used = new Set();
 
 export default async function handler(req, res){
 
   try{
 
-    const { wallet, signature } = req.body;
+    const { signature, wallet } = req.body;
 
-    if(!wallet || !signature){
-      return res.json({ error:"data tidak lengkap" });
+    if(!signature || !wallet){
+      return res.json({ error:"Invalid request" });
     }
 
-    const { data:exist } = await supabase
-      .from("presale")
-      .select("*")
-      .eq("signature", signature)
-      .single();
-
-    if(exist){
-      return res.json({ error:"tx sudah digunakan" });
+    if(used.has(signature)){
+      return res.json({ error:"Already used" });
     }
 
-    const check = await verifyTx(signature);
+    const result = await verifyTx(signature, wallet);
 
-    if(!check.ok){
-      return res.json({ error:"tx tidak valid" });
+    if(!result.ok){
+      return res.json({ error:"Invalid transaction" });
     }
 
-    const sol = check.sol;
-
-    if(sol < MIN_SOL) return res.json({ error:"Min 0.1 SOL" });
-    if(sol > MAX_SOL) return res.json({ error:"Max 1 SOL" });
-
-    const war = Math.floor(sol * SOL_TO_WAR);
-
-    const { data:all } = await supabase
-      .from("presale")
-      .select("war");
-
-    const totalWar = all.reduce((a,b)=>a+(b.war||0),0);
-
-    if(totalWar + war > MAX_SUPPLY){
-      return res.json({ error:"SOLD OUT" });
+    if(result.sol < CONFIG.MIN_SOL || result.sol > CONFIG.MAX_SOL){
+      return res.json({ error:"Invalid amount" });
     }
 
-    await supabase.from("presale").insert([
-      { wallet, sol, war, signature }
-    ]);
+    used.add(signature);
 
-    res.json({
+    const war = result.sol * CONFIG.RATE;
+
+    return res.json({
       success:true,
-      war,
-      totalWar: totalWar + war
+      war
     });
 
-  }catch(err){
-    res.json({ error: err.message });
+  }catch(e){
+    return res.json({ error:e.message });
   }
 }
