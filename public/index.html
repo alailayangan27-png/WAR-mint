@@ -7,29 +7,29 @@
 <!-- Solana -->
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
-<!-- Cloudflare Turnstile -->
+<!-- CAPTCHA -->
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
 <style>
 body{
   margin:0;
-  font-family:Arial, sans-serif;
+  font-family:Arial;
   color:white;
   background:black;
   overflow:hidden;
 }
 
-/* Background Video */
-#bgVideo{
+/* VIDEO BG */
+#bg{
   position:fixed;
   width:100%;
   height:100%;
   object-fit:cover;
   z-index:-2;
-  filter:brightness(0.5);
+  filter:brightness(0.6);
 }
 
-/* Overlay */
+/* OVERLAY */
 .overlay{
   position:fixed;
   width:100%;
@@ -38,61 +38,55 @@ body{
   z-index:-1;
 }
 
-/* Container */
-.container{
+/* CARD */
+.box{
   position:absolute;
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
   width:90%;
-  max-width:420px;
-  display:flex;
-  flex-direction:column;
-  gap:14px;
+  max-width:400px;
   background:rgba(0,0,0,0.7);
   padding:25px;
-  border-radius:20px;
-  box-shadow:0 0 20px rgba(0,255,150,0.3);
+  border-radius:18px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
 }
 
-/* Title */
+/* TITLE */
 h2{
   text-align:center;
   margin:0;
 }
 
-/* Inputs */
+/* INPUT ROW */
 .row{
   display:flex;
   gap:10px;
 }
 
-input,button{
-  padding:14px;
-  border-radius:10px;
-  border:none;
-  font-size:14px;
-}
-
+/* INPUT */
 input{
   flex:1;
+  padding:12px;
+  border-radius:10px;
+  border:none;
   background:#111;
   color:white;
 }
 
-/* Buttons */
+/* BUTTON */
 button{
+  padding:12px;
+  border:none;
+  border-radius:10px;
   background:#00ff99;
-  cursor:pointer;
   font-weight:bold;
-  transition:0.2s;
+  cursor:pointer;
 }
 
-button:hover{
-  background:#00cc77;
-}
-
-/* Progress */
+/* PROGRESS */
 .progress{
   height:8px;
   background:#222;
@@ -106,37 +100,33 @@ button:hover{
   background:#00ff99;
 }
 
-/* Status */
-#status{
-  font-size:13px;
-  text-align:center;
-  opacity:0.8;
-}
-
-/* Wallet */
+/* TEXT */
 #wallet{
   font-size:12px;
   word-break:break-all;
-  opacity:0.7;
   text-align:center;
+}
+
+#status{
+  text-align:center;
+  font-size:13px;
 }
 </style>
 </head>
 
 <body>
 
-<!-- Background Video -->
-<video autoplay muted loop id="bgVideo">
+<video autoplay muted loop id="bg">
   <source src="war.mp4" type="video/mp4">
 </video>
 
 <div class="overlay"></div>
 
-<div class="container">
+<div class="box">
 
 <h2>WAR TOKEN PRESALE</h2>
 
-<button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
+<button id="btn" onclick="toggleWallet()">Connect Wallet</button>
 
 <div id="wallet"></div>
 
@@ -145,32 +135,40 @@ button:hover{
   <button onclick="mint()">Mint</button>
 </div>
 
-<!-- CAPTCHA -->
-<div class="cf-turnstile" data-sitekey="0x4AAAAAACummMSelqc_NBuB"></div>
+<!-- CAPTCHA FIX -->
+<div class="cf-turnstile"
+     data-sitekey="0x4AAAAAACummMSelqc_NBuB"
+     data-callback="onCaptcha">
+</div>
 
 <div class="progress">
   <div id="bar" class="bar"></div>
 </div>
 
-<div id="stats">Loading...</div>
 <div id="status"></div>
 
 </div>
 
 <script>
 let wallet = null;
+let captchaToken = null;
+
+// CAPTCHA CALLBACK
+function onCaptcha(token){
+  captchaToken = token;
+}
 
 // CONNECT / DISCONNECT
 async function toggleWallet(){
 
   if(!window.solana){
-    return alert("Install Phantom Wallet");
+    return alert("Install Phantom");
   }
 
   if(wallet){
     await window.solana.disconnect();
     wallet = null;
-    walletBtn.innerText = "Connect Wallet";
+    btn.innerText = "Connect Wallet";
     document.getElementById("wallet").innerText = "";
     return;
   }
@@ -178,37 +176,11 @@ async function toggleWallet(){
   const res = await window.solana.connect();
   wallet = res.publicKey.toString();
 
-  walletBtn.innerText = "Disconnect";
+  btn.innerText = "Disconnect";
   document.getElementById("wallet").innerText = wallet;
 }
 
-// LOAD STATS
-async function loadStats(){
-  try{
-    const res = await fetch("/api/stats");
-    const data = await res.json();
-
-    document.getElementById("stats").innerText =
-      "Total Minted: " + (data.totalWar || 0) + " WAR";
-
-    const percent = Math.min((data.totalWar / 100000000) * 100, 100);
-    document.getElementById("bar").style.width = percent + "%";
-
-  }catch(e){
-    document.getElementById("stats").innerText = "Stats unavailable";
-  }
-}
-
-setInterval(loadStats, 5000);
-loadStats();
-
-// GET CAPTCHA TOKEN
-function getCaptchaToken(){
-  const el = document.querySelector(".cf-turnstile textarea");
-  return el ? el.value : null;
-}
-
-// MINT FUNCTION
+// MINT
 async function mint(){
 
   if(!wallet){
@@ -221,9 +193,7 @@ async function mint(){
     return alert("Invalid amount");
   }
 
-  const captcha = getCaptchaToken();
-
-  if(!captcha){
+  if(!captchaToken){
     return alert("Complete captcha");
   }
 
@@ -231,28 +201,25 @@ async function mint(){
 
   try{
 
-    // 1. request tx from backend
-    const txData = await fetch("/api/createTx",{
+    // REQUEST BACKEND
+    const req = await fetch("/api/createTx",{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         wallet,
         amount: sol,
-        captcha
+        captcha: captchaToken
       })
     });
 
-    const data = await txData.json();
+    const data = await req.json();
 
     if(data.error){
       return document.getElementById("status").innerText = data.error;
     }
 
-    const connection = new solanaWeb3.Connection(
-      "https://rpc.ankr.com/solana"
-    );
+    const conn = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
 
-    // 2. build transaction
     const tx = new solanaWeb3.Transaction().add(
       solanaWeb3.SystemProgram.transfer({
         fromPubkey: window.solana.publicKey,
@@ -263,16 +230,14 @@ async function mint(){
 
     tx.feePayer = window.solana.publicKey;
 
-    const { blockhash } = await connection.getLatestBlockhash();
+    const { blockhash } = await conn.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
 
-    // 3. sign + send
     const signed = await window.solana.signTransaction(tx);
-    const sig = await connection.sendRawTransaction(signed.serialize());
+    const sig = await conn.sendRawTransaction(signed.serialize());
 
     document.getElementById("status").innerText = "Verifying...";
 
-    // 4. verify
     const verify = await fetch("/api/verify",{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
@@ -287,8 +252,10 @@ async function mint(){
     document.getElementById("status").innerText =
       result.error || ("Success: " + result.war + " WAR");
 
+    captchaToken = null;
+
   }catch(e){
-    document.getElementById("status").innerText = "Error occurred";
+    document.getElementById("status").innerText = "Error";
   }
 }
 </script>
