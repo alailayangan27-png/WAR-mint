@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
+</head>
+
+<body style="background:#0b0b0f;color:white;text-align:center">
+
+<h2>🔥 WAR PRESALE</h2>
+
+<button onclick="connect()">Connect Wallet</button>
+<p id="wallet"></p>
+
+<input id="usd" placeholder="USD (0.5 - 50)">
+
+<br><br>
+
+<button onclick="mint()">MINT WAR</button>
+
+<p id="price"></p>
+<p id="stats"></p>
+<p id="info"></p>
+<p id="status"></p>
+
+<script>
+let wallet = null;
+let solPrice = 0;
+
+const receiver = "ISI_WALLET_KAMU";
+
+async function loadPrice(){
+  const res = await fetch("/api/price");
+  const data = await res.json();
+  solPrice = data.price;
+
+  document.getElementById("price").innerText =
+    "SOL Price: $" + solPrice;
+}
+
+async function loadStats(){
+  const res = await fetch("/api/stats");
+  const data = await res.json();
+
+  document.getElementById("stats").innerText =
+    "Minted: " + data.totalWar +
+    " WAR | Minters: " + data.totalMinters;
+}
+
+setInterval(loadStats, 5000);
+loadStats();
+loadPrice();
+
+async function connect(){
+  const res = await window.solana.connect();
+  wallet = res.publicKey.toString();
+  document.getElementById("wallet").innerText = wallet;
+}
+
+async function mint(){
+
+  const usd = Number(document.getElementById("usd").value);
+
+  if(usd < 0.5) return alert("Min $0.5");
+  if(usd > 50) return alert("Max $50");
+
+  const solAmount = usd / solPrice;
+
+  const connection = new solanaWeb3.Connection("https://rpc.ankr.com/solana");
+
+  const tx = new solanaWeb3.Transaction().add(
+    solanaWeb3.SystemProgram.transfer({
+      fromPubkey: window.solana.publicKey,
+      toPubkey: new solanaWeb3.PublicKey(receiver),
+      lamports: solAmount * 1e9
+    })
+  );
+
+  tx.feePayer = window.solana.publicKey;
+
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+
+  const signed = await window.solana.signTransaction(tx);
+
+  const sig = await connection.sendRawTransaction(signed.serialize());
+
+  document.getElementById("status").innerText = "TX: " + sig;
+
+  const res = await fetch("/api/verify",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ wallet, signature:sig })
+  });
+
+  const data = await res.json();
+
+  document.getElementById("info").innerText =
+    data.war ? "You get " + data.war + " WAR" : "";
+
+  document.getElementById("status").innerText =
+    data.error || "✅ Success";
+
+  loadStats();
+}
+</script>
+
+</body>
+</html>
