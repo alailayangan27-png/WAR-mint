@@ -1,46 +1,91 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAR Presale</title>
+
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
 <style>
 body{
   margin:0;
-  background:black;
+  background:linear-gradient(135deg,#000,#0a0a0a);
   color:white;
   font-family:Arial;
 }
 
+/* CARD */
 .box{
   position:absolute;
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
   width:90%;
-  max-width:400px;
+  max-width:420px;
   background:#111;
-  padding:20px;
-  border-radius:15px;
+  padding:25px;
+  border-radius:20px;
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:12px;
+  box-shadow:0 0 25px rgba(0,255,150,0.2);
 }
 
+/* TITLE */
+h2{
+  text-align:center;
+  margin:0;
+}
+
+/* INPUT */
+input{
+  padding:14px;
+  border-radius:10px;
+  border:none;
+  background:#1a1a1a;
+  color:white;
+}
+
+/* BUTTON */
 button{
-  padding:12px;
-  background:#00ff99;
+  padding:14px;
   border:none;
   border-radius:10px;
   font-weight:bold;
+  background:#00ff99;
+  cursor:pointer;
+  transition:0.2s;
 }
 
-input{
-  padding:12px;
-  border-radius:10px;
-  border:none;
+button:hover{
+  background:#00cc77;
+}
+
+/* PROGRESS */
+.progress{
+  height:10px;
   background:#222;
-  color:white;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+.bar{
+  height:100%;
+  width:0%;
+  background:#00ff99;
+}
+
+/* TEXT */
+#wallet{
+  font-size:12px;
+  word-break:break-all;
+  text-align:center;
+  opacity:0.7;
+}
+
+#status{
+  text-align:center;
+  font-size:13px;
 }
 </style>
 </head>
@@ -49,15 +94,21 @@ input{
 
 <div class="box">
 
-<h2>WAR PRESALE</h2>
+<h2>WAR TOKEN PRESALE</h2>
 
-<button onclick="connect()">Connect Wallet</button>
+<button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
 
 <div id="wallet"></div>
 
 <input id="amount" placeholder="0.1 - 1 SOL">
 
 <button onclick="mint()">Mint</button>
+
+<div class="progress">
+  <div id="bar" class="bar"></div>
+</div>
+
+<div id="progressText">Loading...</div>
 
 <div id="status"></div>
 
@@ -66,61 +117,130 @@ input{
 <script>
 let wallet = null;
 
-async function connect(){
-  const res = await window.solana.connect();
-  wallet = res.publicKey.toString();
-  document.getElementById("wallet").innerText = wallet;
+// CONNECT / DISCONNECT
+async function toggleWallet(){
+
+  try{
+    if(!window.solana){
+      return alert("Install Phantom Wallet");
+    }
+
+    if(wallet){
+      await window.solana.disconnect();
+      wallet = null;
+      walletBtn.innerText = "Connect Wallet";
+      document.getElementById("wallet").innerText = "";
+      return;
+    }
+
+    const res = await window.solana.connect();
+    wallet = res.publicKey.toString();
+
+    walletBtn.innerText = "Disconnect";
+    document.getElementById("wallet").innerText = wallet;
+
+  }catch(e){
+    alert("Wallet error");
+  }
 }
 
+// LOAD PROGRESS
+async function loadProgress(){
+  try{
+    const res = await fetch("/api/stats");
+    const data = await res.json();
+
+    const total = data.total || 0;
+    const max = 100000000;
+
+    const percent = Math.min((total / max) * 100, 100);
+
+    document.getElementById("bar").style.width = percent + "%";
+
+    document.getElementById("progressText").innerText =
+      total + " / " + max + " WAR";
+
+  }catch(e){
+    document.getElementById("progressText").innerText = "No data";
+  }
+}
+
+setInterval(loadProgress, 5000);
+loadProgress();
+
+// MINT
 async function mint(){
 
-  const amount = Number(document.getElementById("amount").value);
+  try{
 
-  const req = await fetch("/api/createTx",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ wallet, amount })
-  });
+    if(!wallet){
+      return alert("Connect wallet first");
+    }
 
-  const data = await req.json();
+    const amount = Number(document.getElementById("amount").value);
 
-  if(data.error){
-    return alert(data.error);
+    if(!amount || amount < 0.1 || amount > 1){
+      return alert("Invalid amount (0.1 - 1 SOL)");
+    }
+
+    document.getElementById("status").innerText = "Creating transaction...";
+
+    const req = await fetch("/api/createTx",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ wallet, amount })
+    });
+
+    const data = await req.json();
+
+    if(data.error){
+      document.getElementById("status").innerText = data.error;
+      return;
+    }
+
+    const conn = new solanaWeb3.Connection(
+      "https://api.mainnet-beta.solana.com"
+    );
+
+    const tx = new solanaWeb3.Transaction().add(
+      solanaWeb3.SystemProgram.transfer({
+        fromPubkey: window.solana.publicKey,
+        toPubkey: new solanaWeb3.PublicKey(data.to),
+        lamports: amount * 1e9
+      })
+    );
+
+    tx.feePayer = window.solana.publicKey;
+
+    const { blockhash } = await conn.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    document.getElementById("status").innerText = "Waiting for wallet...";
+
+    const signed = await window.solana.signTransaction(tx);
+    const sig = await conn.sendRawTransaction(signed.serialize());
+
+    document.getElementById("status").innerText = "Verifying...";
+
+    const verify = await fetch("/api/verify",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        wallet,
+        signature: sig
+      })
+    });
+
+    const result = await verify.json();
+
+    document.getElementById("status").innerText =
+      result.error || "Mint success";
+
+    loadProgress();
+
+  }catch(e){
+    document.getElementById("status").innerText = "Transaction failed";
   }
-
-  const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-
-  const tx = new solanaWeb3.Transaction().add(
-    solanaWeb3.SystemProgram.transfer({
-      fromPubkey: window.solana.publicKey,
-      toPubkey: new solanaWeb3.PublicKey(data.to),
-      lamports: amount * 1e9
-    })
-  );
-
-  tx.feePayer = window.solana.publicKey;
-
-  const { blockhash } = await conn.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
-
-  const signed = await window.solana.signTransaction(tx);
-  const sig = await conn.sendRawTransaction(signed.serialize());
-
-  document.getElementById("status").innerText = "Verifying...";
-
-  const verify = await fetch("/api/verify",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      wallet,
-      signature: sig
-    })
-  });
-
-  const result = await verify.json();
-
-  document.getElementById("status").innerText =
-    result.error || "Success";
 }
 </script>
 
