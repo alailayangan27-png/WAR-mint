@@ -8,7 +8,7 @@ export default async function handler(req, res){
   const tx = await verifyTx(signature, wallet);
 
   if(!tx.ok){
-    return res.json({ error:"Invalid transaction" });
+    return res.json({ error:"Invalid tx" });
   }
 
   const sol = tx.sol;
@@ -19,12 +19,10 @@ export default async function handler(req, res){
     .eq("wallet", wallet)
     .single();
 
-  let total = data?.total_sol || 0;
+  const total = data?.total_sol || 0;
 
   if(total + sol > 1){
-    return res.json({
-      error:"Limit exceeded"
-    });
+    return res.json({ error:"Limit exceeded" });
   }
 
   await supabase.from("mints").upsert({
