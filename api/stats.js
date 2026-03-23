@@ -12,9 +12,7 @@ export default async function handler(req, res){
     total += row.total_sol;
   }
 
-  const war = total * 100000;
-
   res.json({
-    total: war
+    total: total * 100000
   });
 }
