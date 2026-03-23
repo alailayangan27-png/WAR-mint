@@ -1,43 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WAR Presale</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 
 <style>
 body{
   margin:0;
-  background:linear-gradient(135deg,#000,#0a0a0a);
+  background:radial-gradient(circle,#050505,#000);
   color:white;
-  font-family:Arial;
+  font-family:sans-serif;
 }
 
-/* CARD */
-.box{
+.card{
   position:absolute;
   top:50%;
   left:50%;
   transform:translate(-50%,-50%);
   width:90%;
   max-width:420px;
-  background:#111;
+  background:#0f0f0f;
   padding:25px;
   border-radius:20px;
+  box-shadow:0 0 30px rgba(0,255,150,0.2);
   display:flex;
   flex-direction:column;
   gap:12px;
-  box-shadow:0 0 25px rgba(0,255,150,0.2);
 }
 
-/* TITLE */
-h2{
-  text-align:center;
-  margin:0;
+button{
+  padding:14px;
+  border:none;
+  border-radius:10px;
+  background:#00ff99;
+  font-weight:bold;
+  cursor:pointer;
 }
 
-/* INPUT */
 input{
   padding:14px;
   border-radius:10px;
@@ -46,22 +46,6 @@ input{
   color:white;
 }
 
-/* BUTTON */
-button{
-  padding:14px;
-  border:none;
-  border-radius:10px;
-  font-weight:bold;
-  background:#00ff99;
-  cursor:pointer;
-  transition:0.2s;
-}
-
-button:hover{
-  background:#00cc77;
-}
-
-/* PROGRESS */
 .progress{
   height:10px;
   background:#222;
@@ -73,34 +57,21 @@ button:hover{
   height:100%;
   width:0%;
   background:#00ff99;
-}
-
-/* TEXT */
-#wallet{
-  font-size:12px;
-  word-break:break-all;
-  text-align:center;
-  opacity:0.7;
-}
-
-#status{
-  text-align:center;
-  font-size:13px;
+  transition:0.5s;
 }
 </style>
 </head>
 
 <body>
 
-<div class="box">
+<div class="card">
 
 <h2>WAR TOKEN PRESALE</h2>
 
-<button id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
-
+<button onclick="connect()">Connect Wallet</button>
 <div id="wallet"></div>
 
-<input id="amount" placeholder="0.1 - 1 SOL">
+<input id="amountInput" placeholder="0.1 - 1 SOL">
 
 <button onclick="mint()">Mint</button>
 
@@ -108,8 +79,7 @@ button:hover{
   <div id="bar" class="bar"></div>
 </div>
 
-<div id="progressText">Loading...</div>
-
+<div id="progress"></div>
 <div id="status"></div>
 
 </div>
@@ -117,74 +87,61 @@ button:hover{
 <script>
 let wallet = null;
 
-// CONNECT / DISCONNECT
-async function toggleWallet(){
-
+// ================= CONNECT =================
+async function connect(){
   try{
-    if(!window.solana){
-      return alert("Install Phantom Wallet");
-    }
-
-    if(wallet){
-      await window.solana.disconnect();
-      wallet = null;
-      walletBtn.innerText = "Connect Wallet";
-      document.getElementById("wallet").innerText = "";
-      return;
-    }
-
     const res = await window.solana.connect();
     wallet = res.publicKey.toString();
-
-    walletBtn.innerText = "Disconnect";
     document.getElementById("wallet").innerText = wallet;
-
   }catch(e){
-    alert("Wallet error");
+    alert("Wallet connection failed");
   }
 }
 
-// LOAD PROGRESS
-async function loadProgress(){
+// ================= LOAD STATS =================
+async function load(){
+
   try{
-    const res = await fetch("/api/stats");
-    const data = await res.json();
+    const r = await fetch("/api/stats");
+    const d = await r.json();
 
-    const total = data.total || 0;
     const max = 100000000;
-
-    const percent = Math.min((total / max) * 100, 100);
+    const percent = (d.total / max) * 100;
 
     document.getElementById("bar").style.width = percent + "%";
-
-    document.getElementById("progressText").innerText =
-      total + " / " + max + " WAR";
+    document.getElementById("progress").innerText =
+      d.total + " / " + max + " WAR";
 
   }catch(e){
-    document.getElementById("progressText").innerText = "No data";
+    console.log("stats error");
   }
 }
 
-setInterval(loadProgress, 5000);
-loadProgress();
+// load awal + interval ringan
+load();
+setInterval(load, 15000);
 
-// MINT
+// ================= MINT =================
 async function mint(){
+
+  if(!wallet){
+    alert("Connect wallet first");
+    return;
+  }
+
+  const amount = Number(document.getElementById("amountInput").value);
+
+  if(!amount || amount < 0.1 || amount > 1){
+    alert("Invalid amount (0.1 - 1 SOL)");
+    return;
+  }
+
+  const status = document.getElementById("status");
+  status.innerText = "Preparing transaction...";
 
   try{
 
-    if(!wallet){
-      return alert("Connect wallet first");
-    }
-
-    const amount = Number(document.getElementById("amount").value);
-
-    if(!amount || amount < 0.1 || amount > 1){
-      return alert("Invalid amount (0.1 - 1 SOL)");
-    }
-
-    document.getElementById("status").innerText = "Creating transaction...";
-
+    // 1. GET RECEIVER FROM BACKEND
     const req = await fetch("/api/createTx",{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
@@ -194,10 +151,11 @@ async function mint(){
     const data = await req.json();
 
     if(data.error){
-      document.getElementById("status").innerText = data.error;
+      status.innerText = data.error;
       return;
     }
 
+    // 2. CREATE TX (pakai public RPC biar ringan)
     const conn = new solanaWeb3.Connection(
       "https://api.mainnet-beta.solana.com"
     );
@@ -211,17 +169,21 @@ async function mint(){
     );
 
     tx.feePayer = window.solana.publicKey;
+    tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
 
-    const { blockhash } = await conn.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
+    status.innerText = "Waiting for signature...";
 
-    document.getElementById("status").innerText = "Waiting for wallet...";
-
+    // 3. SIGN
     const signed = await window.solana.signTransaction(tx);
+
+    status.innerText = "Sending transaction...";
+
+    // 4. SEND (NO BLOCK)
     const sig = await conn.sendRawTransaction(signed.serialize());
 
-    document.getElementById("status").innerText = "Verifying...";
+    status.innerText = "Transaction sent... verifying...";
 
+    // 5. VERIFY KE BACKEND (TANPA NUNGGU CONFIRM)
     const verify = await fetch("/api/verify",{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
@@ -233,13 +195,16 @@ async function mint(){
 
     const result = await verify.json();
 
-    document.getElementById("status").innerText =
-      result.error || "Mint success";
+    if(result.error){
+      status.innerText = result.error;
+    }else{
+      status.innerText = "SUCCESS 🚀";
+      load();
+    }
 
-    loadProgress();
-
-  }catch(e){
-    document.getElementById("status").innerText = "Transaction failed";
+  }catch(err){
+    console.error(err);
+    status.innerText = "Transaction failed";
   }
 }
 </script>
